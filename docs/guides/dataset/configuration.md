@@ -77,6 +77,7 @@ Configure how PDF documents are parsed. You can select a parsing method based on
   - **Naive:** Suitable for PDFs that primarily contain plain text. It reduces OCR, table recognition, and complex layout analysis, making it faster for simple text-based PDFs.
   - **Docling:** An open-source document parsing tool that can parse PDFs and other documents and extract structured content.
   - **OpenDataLoader:** Extracts text, layout, and structured information from documents. It can serve as an alternative to other built-in parsing methods.
+  - **YoloWPDF:** Sends the PDF to a [yolowpdf](https://github.com/YOLOW92/yolowpdf) service. The service accepts a multipart POST to `/file_parse` and returns `json_doc` plus `md_text`. Set the endpoint with `yolowpdf_apiserver` or `YOLOWPDF_APISERVER`, and an optional bearer token with `yolowpdf_api_key` or `YOLOWPDF_API_KEY`. A selected model instance uses only that instance's endpoint and key.
   - **TCADP Parser:** An open-source parser from Tencent that can parse PDF content.
   - **MonkeyOCRv2:** A vision-based parsing method that combines OCR and visual understanding to process scanned documents, complex layouts, and mixed text and images.
 

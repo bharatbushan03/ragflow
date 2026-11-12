@@ -32,7 +32,7 @@ This switch is separate from **OCR** under Image: OCR recognizes text, while vis
 | Parser | Choose the parsing method or a configured model. See the choices below. |
 | Page ranges | Enter the start and end pages to process. Use **Add page** to add another range. |
 
-The **Parser** dropdown includes **DeepDOC**, **Naive**, **Docling**, **OpenDataLoader**, **TCADP Parser**, and **MonkeyOCRv2**, followed by available configured models grouped by provider. Choose a parser appropriate for your deployment and document layout, and validate its results on a sample file. **Naive** provides simple text extraction for text-based PDFs.
+The **Parser** dropdown includes **DeepDOC**, **Naive**, **Docling**, **OpenDataLoader**, **YoloWPDF**, **TCADP Parser**, and **MonkeyOCRv2**, followed by available configured models grouped by provider. Choose a parser appropriate for your deployment and document layout, and validate its results on a sample file. **Naive** provides simple text extraction for text-based PDFs. **YoloWPDF** calls a remote service at `YOLOWPDF_APISERVER` (or a configured YoloWPDF model instance) that accepts `POST /file_parse` and returns `json_doc` and `md_text`.
 
 ![Configure PDF parser method](https://raw.githubusercontent.com/infiniflow/ragflow-docs/main/images/pipeline_parser_pdf_settings.jpg)
 

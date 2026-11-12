@@ -29,8 +29,9 @@ func TestPDFParserTenantConfigurationPolicy(t *testing.T) {
 	withSSRFBypass(t)
 	t.Setenv(common.EnvSOMarkAPIKey, "global-fixture-key")
 	t.Setenv(common.EnvOpenDataLoaderAPIKey, "global-fixture-key")
+	t.Setenv(common.EnvYoloWPDFAPIKey, "global-fixture-key")
 	t.Setenv(common.EnvSOMarkEnableInlineImage, "true")
-	for _, engine := range []string{"somark", "opendataloader"} {
+	for _, engine := range []string{"somark", "opendataloader", "yolowpdf"} {
 		for _, selected := range []bool{false, true} {
 			t.Run(engine+map[bool]string{false: "/named", true: "/selected"}[selected], func(t *testing.T) {
 				requests := make(chan string, 4)
@@ -45,7 +46,7 @@ func TestPDFParserTenantConfigurationPolicy(t *testing.T) {
 						_ = r.ParseForm()
 					}
 					key := r.FormValue("api_key")
-					if engine == "opendataloader" {
+					if engine == "opendataloader" || engine == "yolowpdf" {
 						key = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 					}
 					requests <- key
@@ -70,7 +71,7 @@ func TestPDFParserTenantConfigurationPolicy(t *testing.T) {
 				defer server.Close()
 				p := NewPDFParser()
 				p.ParseMethod = engine
-				p.SoMarkBaseURL, p.OpenDataLoaderAPIServer = server.URL, server.URL
+				p.SoMarkBaseURL, p.OpenDataLoaderAPIServer, p.YoloWPDFAPIServer = server.URL, server.URL, server.URL
 				p.SoMarkEnableInlineImage = false
 				p.ConfigureFromSetup(map[string]any{"use_tenant_model_config": true})
 				if p.UseTenantModelConfig {

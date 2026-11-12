@@ -24,7 +24,7 @@ import (
 // TestTenantPDFParserReferenceCleaning retains a reference, not resolved
 // credentials, through the existing parser_config cleaning/save/load boundary.
 func TestTenantPDFParserReferenceCleaning(t *testing.T) {
-	for _, ref := range []string{"model-b", "SoMark-model@b@SoMark", "OpenDataLoader-model@b@OpenDataLoader"} {
+	for _, ref := range []string{"model-b", "SoMark-model@b@SoMark", "OpenDataLoader-model@b@OpenDataLoader", "YoloWPDF-model@b@YoloWPDF"} {
 		for _, field := range []string{"parse_method", "layout_recognizer"} {
 			t.Run(ref+"/"+field, func(t *testing.T) {
 				cleaned := buildTestParserConfig(t, generalDSL(t), map[string]any{

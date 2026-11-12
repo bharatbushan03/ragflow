@@ -2244,6 +2244,9 @@ Bu otomatik etiketleme özelliği, mevcut datasete alanına özgü bilgi katman�
         'Lütfen OpenDataLoader API Sunucusunu girin!',
       opendataloaderApiserverPlaceholder:
         'http://your-opendataloader-service:9383',
+      yolowpdfApiserver: 'YoloWPDF API Sunucusu',
+      yolowpdfApiserverMessage: 'Lütfen YoloWPDF API Sunucusunu girin!',
+      yolowpdfApiserverPlaceholder: 'http://your-yolowpdf-service:9384',
       modify: 'Değiştir',
       systemModelSettings: 'Varsayılan modelleri ayarla',
       default: 'Varsayılan',

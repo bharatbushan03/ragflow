@@ -46,6 +46,15 @@ type pdfParserRequest struct {
 	Features      string
 }
 
+func tenantFileParseProvider(provider string) bool {
+	switch provider {
+	case "OpenDataLoader", "YoloWPDF":
+		return true
+	default:
+		return false
+	}
+}
+
 // tenantPDFParserFixture uses real DAO records and local parser HTTP protocols,
 // with a separate decoy instance that must never be selected.
 func tenantPDFParserFixture(t *testing.T, provider string) (*gorm.DB, string, chan pdfParserRequest) {
@@ -107,8 +116,9 @@ func tenantPDFParserFixture(t *testing.T, provider string) (*gorm.DB, string, ch
 	for _, inst := range []struct{ id, url string }{{"a", decoy.URL}, {"b", server.URL}} {
 		key := "fixture-key-" + inst.id
 		extra := fmt.Sprintf(`{"base_url":%q}`, inst.url)
-		if provider == "OpenDataLoader" {
-			key = fmt.Sprintf(`{"api_key":{"opendataloader_apiserver":%q,"opendataloader_api_key":%q}}`, inst.url, key)
+		if tenantFileParseProvider(provider) {
+			engine := strings.ToLower(provider)
+			key = fmt.Sprintf(`{"api_key":{%q:%q,%q:%q}}`, engine+"_apiserver", inst.url, engine+"_api_key", key)
 			extra = "{}"
 		}
 		for _, row := range []any{
@@ -133,7 +143,7 @@ func TestTenantPDFParserModelSelection(t *testing.T) {
 		return nil, fmt.Errorf("unexpected generic VLM path")
 	}
 	t.Cleanup(func() { pdfVisionPageRenderer = originalRenderer })
-	for _, provider := range []string{"SoMark", "OpenDataLoader"} {
+	for _, provider := range []string{"SoMark", "OpenDataLoader", "YoloWPDF"} {
 		for _, field := range []string{"parse_method", "layout_recognizer"} {
 			for _, form := range []string{"id", "composite"} {
 				t.Run(provider+"/"+field+"/"+form, func(t *testing.T) {
@@ -166,8 +176,8 @@ func TestTenantPDFParserModelSelection(t *testing.T) {
 						if provider == "SoMark" && request.Key != "fixture-key-b" {
 							t.Fatalf("wrong SoMark instance credentials")
 						}
-						if provider == "OpenDataLoader" && request.Authorization != "Bearer fixture-key-b" {
-							t.Fatalf("wrong OpenDataLoader instance credentials")
+						if tenantFileParseProvider(provider) && request.Authorization != "Bearer fixture-key-b" {
+							t.Fatalf("wrong %s instance credentials", provider)
 						}
 					}
 				})
@@ -179,7 +189,7 @@ func TestTenantPDFParserModelSelection(t *testing.T) {
 // TestTenantPDFParserRejectsInvalidSelection checks real stored records; a bad
 // explicit selection must fail without an HTTP request or a different model.
 func TestTenantPDFParserRejectsInvalidSelection(t *testing.T) {
-	for _, provider := range []string{"SoMark", "OpenDataLoader"} {
+	for _, provider := range []string{"SoMark", "OpenDataLoader", "YoloWPDF"} {
 		for _, tc := range []struct {
 			name   string
 			mutate func(*gorm.DB) error
@@ -221,8 +231,8 @@ func TestTenantPDFParserRejectsInvalidSelection(t *testing.T) {
 				return db.Model(&entity.TenantModel{}).Where("id = ?", "model-b").Update("extra", `{"somark_enable_inline_image":"false"}`).Error
 			}, "tenant-1"},
 		} {
-			if provider == "OpenDataLoader" && (tc.name == "malformed-model-options" || tc.name == "invalid-option-type") {
-				continue // OpenDataLoader has no SoMark-specific model options.
+			if tenantFileParseProvider(provider) && (tc.name == "malformed-model-options" || tc.name == "invalid-option-type") {
+				continue // Structured file-parse providers have no SoMark-specific model options.
 			}
 			for _, form := range []string{"id", "composite"} {
 				t.Run(provider+"/"+tc.name+"/"+form, func(t *testing.T) {
@@ -253,7 +263,7 @@ func TestTenantPDFParserRejectsInvalidSelection(t *testing.T) {
 // explicit reference terminal, rather than treating it as an unselected parser.
 func TestTenantPDFParserMissingModelIDIsHandled(t *testing.T) {
 	const missingModelID = "7f4e7a5ce0fa4abda74cd99b6a2f89c1"
-	for _, provider := range []string{"SoMark", "OpenDataLoader"} {
+	for _, provider := range []string{"SoMark", "OpenDataLoader", "YoloWPDF"} {
 		for _, field := range []string{"parse_method", "layout_recognizer"} {
 			t.Run(provider+"/"+field, func(t *testing.T) {
 				db, _, requests := tenantPDFParserFixture(t, provider)
@@ -298,6 +308,7 @@ func TestTenantPDFParserMissingModelIDInvokeDoesNotFallback(t *testing.T) {
 		{"layout_recognizer", "deepdoc"},
 		{"layout_recognizer", "somark"},
 		{"layout_recognizer", "opendataloader"},
+		{"layout_recognizer", "yolowpdf"},
 	} {
 		t.Run(tc.field+"/"+tc.method, func(t *testing.T) {
 			db, _, requests := tenantPDFParserFixture(t, "SoMark")
@@ -313,6 +324,8 @@ func TestTenantPDFParserMissingModelIDInvokeDoesNotFallback(t *testing.T) {
 			t.Setenv(common.EnvSOMarkAPIKey, "environment-key-must-not-be-used")
 			t.Setenv(common.EnvOpenDataLoaderAPIServer, fallback.URL+"/environment/opendataloader")
 			t.Setenv(common.EnvOpenDataLoaderAPIKey, "environment-key-must-not-be-used")
+			t.Setenv(common.EnvYoloWPDFAPIServer, fallback.URL+"/environment/yolowpdf")
+			t.Setenv(common.EnvYoloWPDFAPIKey, "environment-key-must-not-be-used")
 
 			originalRenderer, originalResolver := pdfVisionPageRenderer, pdfVisionModelResolver
 			originalPromptLoader, originalInvoker := pdfVisionPromptLoader, pdfVisionChatInvoker
@@ -351,6 +364,8 @@ func TestTenantPDFParserMissingModelIDInvokeDoesNotFallback(t *testing.T) {
 				"somark_base_url": fallback.URL + "/setup/somark", "somark_api_key": "setup-key-must-not-be-used",
 				"opendataloader_apiserver": fallback.URL + "/setup/opendataloader",
 				"opendataloader_api_key":   "setup-key-must-not-be-used",
+				"yolowpdf_apiserver":       fallback.URL + "/setup/yolowpdf",
+				"yolowpdf_api_key":         "setup-key-must-not-be-used",
 			}
 			if err := db.AutoMigrate(&entity.UserCanvas{}); err != nil {
 				t.Fatal(err)
@@ -437,7 +452,8 @@ func TestTenantPDFParserEnvironmentIsolation(t *testing.T) {
 	t.Setenv(common.EnvSOMarkAPIKey, "global-secret-must-not-be-used")
 	t.Setenv(common.EnvSOMarkEnableInlineImage, "true")
 	t.Setenv(common.EnvOpenDataLoaderAPIKey, "global-secret-must-not-be-used")
-	for _, provider := range []string{"SoMark", "OpenDataLoader"} {
+	t.Setenv(common.EnvYoloWPDFAPIKey, "global-secret-must-not-be-used")
+	for _, provider := range []string{"SoMark", "OpenDataLoader", "YoloWPDF"} {
 		t.Run(provider, func(t *testing.T) {
 			db, ref, requests := tenantPDFParserFixture(t, provider)
 			var instance entity.TenantModelInstance
@@ -445,18 +461,16 @@ func TestTenantPDFParserEnvironmentIsolation(t *testing.T) {
 				t.Fatal(err)
 			}
 			update := map[string]any{"api_key": ""}
-			if provider == "OpenDataLoader" {
+			if tenantFileParseProvider(provider) {
 				// Move this instance's URL to ordinary base_url storage, while
 				// intentionally leaving its optional credential empty.
 				var stored struct {
-					APIKey struct {
-						Endpoint string `json:"opendataloader_apiserver"`
-					} `json:"api_key"`
+					APIKey map[string]string `json:"api_key"`
 				}
 				if err := json.Unmarshal([]byte(instance.APIKey), &stored); err != nil {
 					t.Fatal(err)
 				}
-				update["extra"] = fmt.Sprintf(`{"base_url":%q}`, stored.APIKey.Endpoint)
+				update["extra"] = fmt.Sprintf(`{"base_url":%q}`, stored.APIKey[strings.ToLower(provider)+"_apiserver"])
 			}
 			if err := db.Model(&instance).Updates(update).Error; err != nil {
 				t.Fatal(err)
@@ -495,7 +509,7 @@ func TestTenantPDFParserKeepsSSRFGuard(t *testing.T) {
 // construction and output after a persisted reference is reloaded. Credentials
 // are looked up again on each invocation, not cached or written into params.
 func TestTenantPDFParserConfigRoundTripAndRotation(t *testing.T) {
-	for _, provider := range []string{"SoMark", "OpenDataLoader"} {
+	for _, provider := range []string{"SoMark", "OpenDataLoader", "YoloWPDF"} {
 		t.Run(provider, func(t *testing.T) {
 			db, ref, requests := tenantPDFParserFixture(t, provider)
 			params := map[string]any{"pdf": map[string]any{"parse_method": ref}}
@@ -541,7 +555,7 @@ func TestTenantPDFParserConfigRoundTripAndRotation(t *testing.T) {
 				for len(requests) > 0 {
 					request := <-requests
 					if provider == "SoMark" && request.Key != key ||
-						provider == "OpenDataLoader" && request.Authorization != "Bearer "+key {
+						tenantFileParseProvider(provider) && request.Authorization != "Bearer "+key {
 						t.Fatal("runtime used stale or wrong credentials")
 					}
 				}
@@ -557,14 +571,14 @@ func TestTenantPDFParserConfigRoundTripAndRotation(t *testing.T) {
 // TestTenantPDFParserBareEnginesAndOtherModels leaves existing named engines
 // and other providers to their current dispatch paths.
 func TestTenantPDFParserBareEnginesAndOtherModels(t *testing.T) {
-	for _, selector := range []string{"", "somark", "OpenDataLoader", "deepdoc", "plain_text", "vision@b@OpenAI"} {
+	for _, selector := range []string{"", "somark", "OpenDataLoader", "YoloWPDF", "yolowpdf", "deepdoc", "plain_text", "vision@b@OpenAI"} {
 		_, handled, err := maybeDispatchTenantPDFParser(t.Context(), nil, "sample.pdf", []byte("pdf"),
 			"tenant-1", schema.ParserSetup{"parse_method": selector})
 		if handled || err != nil {
 			t.Fatalf("unrelated/bare selector %q intercepted: %v", selector, err)
 		}
 	}
-	for _, selector := range []string{"SoMark-model@b@SoMark", "OpenDataLoader-model@b@OpenDataLoader", "@b@SoMark"} {
+	for _, selector := range []string{"SoMark-model@b@SoMark", "OpenDataLoader-model@b@OpenDataLoader", "YoloWPDF-model@b@YoloWPDF", "@b@SoMark"} {
 		_, handled, err := maybeDispatchTenantPDFParser(t.Context(), nil, "sample.pdf", []byte("pdf"),
 			"tenant-1", schema.ParserSetup{"parse_method": selector})
 		if !handled || err == nil {
@@ -606,7 +620,7 @@ func TestTenantPDFParserExplicitOptions(t *testing.T) {
 // TestTenantPDFParserFailureDoesNotFallback returns the selected backend's
 // failure rather than silently trying another instance or a VLM.
 func TestTenantPDFParserFailureDoesNotFallback(t *testing.T) {
-	for _, provider := range []string{"SoMark", "OpenDataLoader"} {
+	for _, provider := range []string{"SoMark", "OpenDataLoader", "YoloWPDF"} {
 		t.Run(provider, func(t *testing.T) {
 			db, ref, otherRequests := tenantPDFParserFixture(t, provider)
 			calls := make(chan struct{}, 2)

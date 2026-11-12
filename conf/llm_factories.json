@@ -8086,6 +8086,21 @@
             ]
         },
         {
+            "name": "YoloWPDF",
+            "logo": "",
+            "tags": "OCR",
+            "status": "1",
+            "url": "https://github.com/YOLOW92/yolowpdf",
+            "llm": [
+                {
+                    "llm_name": "YoloWPDF-model",
+                    "tags": "OCR",
+                    "max_tokens": 8192,
+                    "model_type": "ocr"
+                }
+            ]
+        },
+        {
             "name": "SoMark",
             "logo": "",
             "tags": "OCR",

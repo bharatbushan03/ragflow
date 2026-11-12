@@ -76,6 +76,8 @@ type Environments struct {
 	DeepDocBatchCSV                   string `mapstructure:"deep_doc_batch_csv"`
 	OpenDataLoaderAPIServer           string `mapstructure:"open_dataloader_api_server"`        // OPENDATALOADER_APISERVER
 	OpenDataLoaderAPIKey              string `mapstructure:"open_dataloader_api_key"`           // OPENDATALOADER_API_KEY
+	YoloWPDFAPIServer                 string `mapstructure:"yolowpdf_api_server"`               // YOLOWPDF_APISERVER
+	YoloWPDFAPIKey                    string `mapstructure:"yolowpdf_api_key"`                  // YOLOWPDF_API_KEY
 	PaddleOCRBaseURL                  string `mapstructure:"paddle_ocr_base_url"`               // PADDLEOCR_BASE_URL
 	PaddleOCRAPIURL                   string `mapstructure:"paddle_ocr_api_url"`                // PADDLEOCR_API_URL
 	PaddleOCRAccessToken              string `mapstructure:"paddle_ocr_access_token"`           // PADDLEOCR_ACCESS_TOKEN
@@ -406,6 +408,16 @@ func (c *Config) GetEnvironments() error {
 		c.environments.OpenDataLoaderAPIKey = OpenDataLoaderAPIKeyStr
 	}
 
+	YoloWPDFAPIServerStr := common.GetEnv(common.EnvYoloWPDFAPIServer)
+	if YoloWPDFAPIServerStr != "" {
+		c.environments.YoloWPDFAPIServer = YoloWPDFAPIServerStr
+	}
+
+	YoloWPDFAPIKeyStr := common.GetEnv(common.EnvYoloWPDFAPIKey)
+	if YoloWPDFAPIKeyStr != "" {
+		c.environments.YoloWPDFAPIKey = YoloWPDFAPIKeyStr
+	}
+
 	PaddleOCRBaseURLStr := common.GetEnv(common.EnvPaddleOCRBaseUrl)
 	if PaddleOCRBaseURLStr != "" {
 		c.environments.PaddleOCRBaseURL = PaddleOCRBaseURLStr
@@ -727,6 +739,14 @@ func (c *Config) GetOpenDataLoaderAPIServer() string {
 
 func (c *Config) GetOpenDataLoaderAPIKey() string {
 	return c.environments.OpenDataLoaderAPIKey
+}
+
+func (c *Config) GetYoloWPDFAPIServer() string {
+	return c.environments.YoloWPDFAPIServer
+}
+
+func (c *Config) GetYoloWPDFAPIKey() string {
+	return c.environments.YoloWPDFAPIKey
 }
 
 func (c *Config) GetPaddleOCRBaseURL() string {

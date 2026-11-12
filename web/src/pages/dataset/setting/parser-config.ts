@@ -37,6 +37,7 @@ export function normalizeParserConfigForComparison(
                 ParseDocumentType.DeepDOC,
                 ParseDocumentType.PlainText,
                 ParseDocumentType.TCADPParser,
+                ParseDocumentType.YoloWPDF,
               ].includes(setup.parse_method) &&
               !setup.lang
             ) {
