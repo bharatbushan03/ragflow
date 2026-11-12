@@ -1646,6 +1646,9 @@ export default {
         'OpenDataLoader APIサーバーを入力してください!',
       opendataloaderApiserverPlaceholder:
         'http://your-opendataloader-service:9383',
+      yolowpdfApiserver: 'YoloWPDF APIサーバー',
+      yolowpdfApiserverMessage: 'YoloWPDF APIサーバーを入力してください!',
+      yolowpdfApiserverPlaceholder: 'http://your-yolowpdf-service:9384',
       default: 'デフォルト',
       empty: 'データがありません',
       docLink: 'ドキュメントリンク',

@@ -2043,6 +2043,9 @@ export default {
         'Iltimos, OpenDataLoader API Server’ni kiriting!',
       opendataloaderApiserverPlaceholder:
         'http://your-opendataloader-service:9383',
+      yolowpdfApiserver: 'YoloWPDF API Server',
+      yolowpdfApiserverMessage: 'Iltimos, YoloWPDF API Server’ni kiriting!',
+      yolowpdfApiserverPlaceholder: 'http://your-yolowpdf-service:9384',
       modify: 'O‘zgartirish',
       systemModelSettings: 'Standart modellarni belgilash',
       default: 'Standart',

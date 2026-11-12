@@ -143,6 +143,7 @@ var supportedPDFParseMethods = map[string]struct{}{
 	"mineru":         {},
 	"docling":        {},
 	"opendataloader": {},
+	"yolowpdf":       {},
 	"somark":         {},
 	"tcadp":          {},
 }
@@ -157,8 +158,9 @@ type PDFParser struct {
 	EnableMultiColumn  bool
 	ParseMethod        string
 	// UseTenantModelConfig disables global endpoint/credential/option fallback
-	// for explicitly resolved SoMark/OpenDataLoader instances. Runtime-only;
-	// ConfigureFromSetup does not accept this flag from persisted settings.
+	// for explicitly resolved SoMark/OpenDataLoader/YoloWPDF instances.
+	// Runtime-only; ConfigureFromSetup does not accept this flag from persisted
+	// settings.
 	UseTenantModelConfig bool
 	// Pages restricts parsing to these 1-indexed inclusive page ranges.
 	// nil/empty means parse all pages. Populated by ConfigureFromSetup from
@@ -189,6 +191,9 @@ type PDFParser struct {
 	OpenDataLoaderHybrid              string
 	OpenDataLoaderImageOutput         string
 	OpenDataLoaderSanitize            *bool
+	YoloWPDFAPIServer                 string
+	YoloWPDFAPIKey                    string
+	YoloWPDFTimeout                   int
 	SoMarkBaseURL                     string
 	SoMarkAPIKey                      string
 	SoMarkImageFormat                 string
@@ -216,7 +221,8 @@ func NewPDFParser() *PDFParser {
 		ParseMethod:                    "deepdoc",
 		MinerUBackend:                  "",
 		MinerUPollTimeout:              minerUPollTimeout,
-		OpenDataLoaderTimeout:          openDataLoaderTimeoutSeconds,
+		OpenDataLoaderTimeout:          fileParseTimeoutSeconds,
+		YoloWPDFTimeout:                fileParseTimeoutSeconds,
 		SoMarkBaseURL:                  "https://somark.cn/api/v1",
 		SoMarkImageFormat:              "url",
 		SoMarkFormulaFormat:            "latex",
@@ -302,6 +308,18 @@ func (p *PDFParser) ConfigureFromSetup(setup map[string]any) {
 	if v, ok := setup["sanitize"].(bool); ok {
 		p.OpenDataLoaderSanitize = &v
 	}
+	if v, ok := setup["yolowpdf_apiserver"].(string); ok && v != "" {
+		p.YoloWPDFAPIServer = v
+	}
+	if v, ok := setup["yolowpdf_api_key"].(string); ok {
+		p.YoloWPDFAPIKey = v
+	}
+	if v, ok := setup["yolowpdf_timeout"].(int); ok && v > 0 {
+		p.YoloWPDFTimeout = v
+	}
+	if v, ok := setup["yolowpdf_timeout"].(float64); ok && v > 0 {
+		p.YoloWPDFTimeout = int(v)
+	}
 	if v, ok := setup["somark_base_url"].(string); ok && v != "" {
 		p.SoMarkBaseURL = v
 	}
@@ -386,6 +404,7 @@ var pdfParseMethodSpellings = map[string]string{
 	"monkeyocrv2":    "monkeyocrv2",
 	"docling":        "docling",
 	"opendataloader": "opendataloader",
+	"yolowpdf":       "yolowpdf",
 	"tcadp parser":   "tcadp",
 	"paddleocr":      "paddleocr",
 	"somark":         "somark",
@@ -429,6 +448,8 @@ func normalizePDFParseMethod(raw string) string {
 		return "somark"
 	case strings.HasSuffix(method, "@opendataloader"):
 		return "opendataloader"
+	case strings.HasSuffix(method, "@yolowpdf"):
+		return "yolowpdf"
 	}
 	if canonical, ok := pdfParseMethodSpellings[method]; ok {
 		return canonical
@@ -449,7 +470,7 @@ func (p *PDFParser) validateParseMethod() error {
 	if _, ok := supportedPDFParseMethods[method]; ok {
 		return nil
 	}
-	return fmt.Errorf("parser: unsupported PDF parse_method %q (standalone PDFParser supports: deepdoc, plain_text, mineru, docling, opendataloader, somark, tcadp; methods backed by a registered external analyzer factory are supported; tenant-resolved custom IMAGE2TEXT/VLM model names are not supported in the parser layer)", p.ParseMethod)
+	return fmt.Errorf("parser: unsupported PDF parse_method %q (standalone PDFParser supports: deepdoc, plain_text, mineru, docling, opendataloader, yolowpdf, somark, tcadp; methods backed by a registered external analyzer factory are supported; tenant-resolved custom IMAGE2TEXT/VLM model names are not supported in the parser layer)", p.ParseMethod)
 }
 
 // ParseWithResult parses a PDF into a ParseResult, dispatching on the
@@ -487,6 +508,8 @@ func (p *PDFParser) parseWithResult(ctx context.Context, filename string, data [
 		return parsePDFWithDocling(ctx, filename, data, p)
 	case "opendataloader":
 		return parsePDFWithOpenDataLoader(ctx, filename, data, p)
+	case "yolowpdf":
+		return parsePDFWithYoloWPDF(ctx, filename, data, p)
 	case "somark":
 		return parsePDFWithSoMark(ctx, filename, data, p)
 	case "tcadp":

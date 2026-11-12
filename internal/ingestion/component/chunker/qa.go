@@ -416,7 +416,7 @@ func extractQAJSON(items []schema.ChunkDoc, fileType string) []qaPair {
 		}
 		// Route on what the row walker can read, not on the type label.
 		// doc_type:"table" is not truthful for every producer: the
-		// opendataloader, tcadp and somark PDF parsers tag text that holds
+		// opendataloader, yolowpdf, tcadp and somark PDF parsers tag text that holds
 		// no <table> markup, so such an item used to enter the table
 		// extractor, find no rows, and silently lose every pair; conversely
 		// a text-labelled block holding real table markup is read as a

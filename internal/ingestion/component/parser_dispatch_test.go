@@ -2012,6 +2012,38 @@ func TestDispatch_PDFOpenDataLoaderLegacyMarkdownEmitsJSON(t *testing.T) {
 	requireJSONText(t, out, "ODL Title")
 }
 
+func TestDispatch_PDFYoloWPDFMarkdownEmitsJSON(t *testing.T) {
+	withSSRFBypass(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/file_parse" {
+			http.NotFound(w, r)
+			return
+		}
+		if got, want := r.Header.Get("Authorization"), "Bearer yolow-secret"; got != want {
+			t.Errorf("Authorization = %q, want %q", got, want)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"json_doc":null,"md_text":"# Yolo Title\n\nYolo body.\n"}`))
+	}))
+	defer server.Close()
+
+	setups := defaultSetups()
+	setups["pdf"]["parse_method"] = "YoloWPDF"
+	setups["pdf"]["yolowpdf_apiserver"] = server.URL
+	setups["pdf"]["yolowpdf_api_key"] = "yolow-secret"
+	c := &ParserComponent{setups: setups}
+
+	out, err := c.Invoke(t.Context(), nil, map[string]any{
+		"binary":    []byte("%PDF-1.4"),
+		"file_type": "pdf",
+		"name":      "sample.pdf",
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	requireJSONText(t, out, "Yolo Title")
+}
+
 func TestDispatch_PDFSoMarkLegacyMarkdownEmitsJSON(t *testing.T) {
 	withSSRFBypass(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

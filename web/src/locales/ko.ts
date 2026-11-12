@@ -1566,6 +1566,9 @@ export default {
       opendataloaderApiserverMessage: 'OpenDataLoader API 서버를 입력해 주세요',
       opendataloaderApiserverPlaceholder:
         'http://your-opendataloader-service:9383',
+      yolowpdfApiserver: 'YoloWPDF API 서버',
+      yolowpdfApiserverMessage: 'YoloWPDF API 서버를 입력해 주세요',
+      yolowpdfApiserverPlaceholder: 'http://your-yolowpdf-service:9384',
       modify: '수정',
       systemModelSettings: '기본 모델 설정',
       chatModel: 'LLM',

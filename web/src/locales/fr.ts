@@ -1251,6 +1251,9 @@ Applicable lorsque vous avez besoin que le LLM résume le document entier.
         'Veuillez saisir le serveur API OpenDataLoader !',
       opendataloaderApiserverPlaceholder:
         'http://votre-service-opendataloader:9383',
+      yolowpdfApiserver: 'Serveur API YoloWPDF',
+      yolowpdfApiserverMessage: 'Veuillez saisir le serveur API YoloWPDF !',
+      yolowpdfApiserverPlaceholder: 'http://votre-service-yolowpdf:9384',
       modify: 'Modifier',
       systemModelSettings: 'Définir les modèles par défaut',
       chatModel: 'Modèle de chat',

@@ -39,6 +39,8 @@ func TestMigrateParserChunkerTokenizerConfig(t *testing.T) {
 		{name: "tcadp result options follow the engine", parser: "table", input: `{"layout_recognize":"TCADP Parser","table_result_type":"2","markdown_image_response_type":"2"}`, want: `{"Parser:HipSignsRhyme":{"spreadsheet":{"markdown_image_response_type":"2","parse_method":"tcadp","table_result_type":"2"}}}`},
 		{name: "tcadp result options without the engine", parser: "table", input: `{"layout_recognize":"DeepDOC","table_result_type":"2"}`, want: `{}`},
 		{name: "model reference stays a layout recognizer", input: `{"layout_recognize":"bge-m3@mineru"}`, want: `{"Parser:HipSignsRhyme":{"pdf":{"layout_recognizer":"bge-m3@mineru"}}}`},
+		{name: "yolowpdf engine", input: `{"layout_recognize":"YoloWPDF"}`, want: `{"Parser:HipSignsRhyme":{"pdf":{"parse_method":"yolowpdf"}}}`},
+		{name: "yolowpdf model reference stays a layout recognizer", input: `{"layout_recognize":"YoloWPDF-model@b@YoloWPDF"}`, want: `{"Parser:HipSignsRhyme":{"pdf":{"layout_recognizer":"YoloWPDF-model@b@YoloWPDF"}}}`},
 		{name: "PaddleOCR model reference becomes the engine", input: `{"layout_recognize":"PaddleOCR-VL-1.5@paddle1.5@PaddleOCR"}`, want: `{"Parser:HipSignsRhyme":{"pdf":{"parse_method":"paddleocr"}}}`},
 		{name: "existing engine wins over old model reference", input: `{"layout_recognize":"foo@MinerU","Parser:HipSignsRhyme":{"pdf":{"parse_method":"plain_text"}}}`, want: `{"Parser:HipSignsRhyme":{"pdf":{"parse_method":"plain_text"}}}`},
 		{name: "existing model reference wins over old engine", input: `{"layout_recognize":"DeepDOC","Parser:HipSignsRhyme":{"pdf":{"layout_recognizer":"foo@MinerU"}}}`, want: `{"Parser:HipSignsRhyme":{"pdf":{"layout_recognizer":"foo@MinerU"}}}`},

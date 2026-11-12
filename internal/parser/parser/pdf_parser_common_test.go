@@ -313,6 +313,9 @@ func TestPDFParser_ValidateParseMethod(t *testing.T) {
 	if got, want := normalizePDFParseMethod("tenant@provider@OpenDataLoader"), "opendataloader"; got != want {
 		t.Fatalf("normalizePDFParseMethod(OpenDataLoader suffix) = %q, want %q", got, want)
 	}
+	if got, want := normalizePDFParseMethod("tenant@provider@YoloWPDF"), "yolowpdf"; got != want {
+		t.Fatalf("normalizePDFParseMethod(YoloWPDF suffix) = %q, want %q", got, want)
+	}
 
 	p.ConfigureFromSetup(map[string]any{"parse_method": "CustomVLM"})
 	err := p.validateParseMethod()
@@ -358,10 +361,10 @@ func TestNormalizePDFParseMethod_PlainTextSpellings(t *testing.T) {
 func TestIsPDFParseMethod(t *testing.T) {
 	named := []string{
 		"deepdoc", "plain_text", "plaintext", "plain text", "mineru",
-		"monkeyocr", "monkeyocrv2", "docling", "opendataloader", "tcadp parser",
+		"monkeyocr", "monkeyocrv2", "docling", "opendataloader", "yolowpdf", "tcadp parser",
 		"paddleocr", "somark",
 		"DeepDoc", "PLAIN_TEXT", "MinerU", "DocLing",
-		"OpenDataLoader", "TCADP Parser", "PaddleOCR", "SoMark",
+		"OpenDataLoader", "YoloWPDF", "TCADP Parser", "PaddleOCR", "SoMark",
 		"Plain Text", "PlainText", "PLAIN TEXT",
 	}
 	for _, v := range named {
@@ -394,6 +397,7 @@ func TestIsPDFParseMethodLayoutSuffixes(t *testing.T) {
 		"foo@paddleocr", "@paddleocr",
 		"foo@somark", "@somark",
 		"foo@opendataloader", "@opendataloader",
+		"foo@yolowpdf", "@yolowpdf",
 		"foo@unknown",
 	}
 	for _, v := range suffixed {

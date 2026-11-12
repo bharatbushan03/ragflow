@@ -1892,6 +1892,9 @@ NER：使用 spaCy NER 和基于规则的关键词提取来抽取 Entities 和 R
       opendataloaderApiserverMessage: '请输入 OpenDataLoader API 服务器！',
       opendataloaderApiserverPlaceholder:
         'http://your-opendataloader-service:9383',
+      yolowpdfApiserver: 'YoloWPDF API 服务器',
+      yolowpdfApiserverMessage: '请输入 YoloWPDF API 服务器！',
+      yolowpdfApiserverPlaceholder: 'http://your-yolowpdf-service:9384',
       modify: '修改',
       systemModelSettings: '设置默认模型',
       default: '默认',

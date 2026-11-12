@@ -88,6 +88,7 @@ export enum LLMFactory {
   PaddleOCRLocal = 'PaddleOCR.local',
   MiniCPMOCR = 'MiniCPM-OCR',
   OpenDataLoader = 'OpenDataLoader',
+  YoloWPDF = 'YoloWPDF',
   SoMark = 'SoMark',
   N1n = 'n1n',
   Avian = 'Avian',
