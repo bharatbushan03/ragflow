@@ -38,6 +38,7 @@ export const enum ParseDocumentType {
   PlainText = 'Plain Text',
   Docling = 'Docling',
   OpenDataLoader = 'OpenDataLoader',
+  YoloWPDF = 'YoloWPDF',
   TCADPParser = 'TCADP Parser',
   MonkeyOCRv2 = 'MonkeyOCRv2',
 }
@@ -98,6 +99,7 @@ export function LayoutRecognizeFormField({
           ParseDocumentType.PlainText,
           ParseDocumentType.Docling,
           ParseDocumentType.OpenDataLoader,
+          ParseDocumentType.YoloWPDF,
           ParseDocumentType.TCADPParser,
           ParseDocumentType.MonkeyOCRv2,
         ].map((x) => ({

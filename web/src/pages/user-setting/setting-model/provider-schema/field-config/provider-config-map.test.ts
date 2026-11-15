@@ -109,6 +109,13 @@ describe('provider instance submit transforms', () => {
         fish_audio_refid: 'voice-1',
       },
     ],
+    [
+      LLMFactory.YoloWPDF,
+      {
+        yolowpdf_apiserver: 'http://127.0.0.1:9384',
+        yolowpdf_api_key: 'secret',
+      },
+    ],
   ])('%s places provider settings in api_key', (provider, settings) => {
     const payload = ProviderConfigMap[provider].submitTransform?.({
       instance_name: 'test-instance',

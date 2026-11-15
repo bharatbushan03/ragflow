@@ -32,6 +32,7 @@ export const SavedProviderConfigFields = [
   'mineru_output_dir',
   'mineru_server_url',
   'opendataloader_apiserver',
+  'yolowpdf_apiserver',
   'paddleocr_api_url',
   'provider_order',
 ] as const;

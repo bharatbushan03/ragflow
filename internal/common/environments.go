@@ -239,6 +239,8 @@ const (
 	EnvMonkeyOCRDeleteOutput             = "MONKEYOCR_DELETE_OUTPUT"
 	EnvOpenDataLoaderAPIServer           = "OPENDATALOADER_APISERVER"
 	EnvOpenDataLoaderAPIKey              = "OPENDATALOADER_API_KEY"
+	EnvYoloWPDFAPIServer                 = "YOLOWPDF_APISERVER"
+	EnvYoloWPDFAPIKey                    = "YOLOWPDF_API_KEY"
 	EnvPaddleOCRBaseUrl                  = "PADDLEOCR_BASE_URL"
 	EnvPaddleOCRAPIURL                   = "PADDLEOCR_API_URL"
 	EnvPaddleOCRAccessToken              = "PADDLEOCR_ACCESS_TOKEN"

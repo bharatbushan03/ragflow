@@ -2,12 +2,8 @@ package parser
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"math"
-	"mime/multipart"
-	"net/http"
 	"ragflow/internal/common"
 	"ragflow/internal/deepdoc/parser/pdf/table"
 	"sort"
@@ -15,126 +11,57 @@ import (
 	"time"
 )
 
-// openDataLoaderTimeoutSeconds bounds the single submit call. OpenDataLoader
-// parses synchronously, so a stalled server otherwise holds an ingestion worker
-// open until the transport's own 20-minute header timeout.
-const openDataLoaderTimeoutSeconds = 600
+// fileParseTimeoutSeconds bounds one synchronous /file_parse submit. These
+// servers parse in the request, so a stall otherwise holds an ingestion worker
+// until the transport's own 20-minute header timeout.
+const fileParseTimeoutSeconds = 600
 
 // parsePDFWithOpenDataLoader normalizes the selected server's JSON or Markdown
 // output. Explicit tenant configuration never borrows a global endpoint or key.
 func parsePDFWithOpenDataLoader(ctx context.Context, filename string, data []byte, parser *PDFParser) ParseResult {
-	if len(data) == 0 {
-		return emptyPDFResult(filename)
-	}
 	baseURL := strings.TrimSpace(parser.OpenDataLoaderAPIServer)
 	if baseURL == "" && !parser.UseTenantModelConfig {
 		baseURL = strings.TrimSpace(common.GetEnv(common.EnvOpenDataLoaderAPIServer))
-	}
-	if baseURL == "" {
-		return ParseResult{Err: fmt.Errorf("parser: OpenDataLoader requires opendataloader_apiserver or OPENDATALOADER_APISERVER")}
 	}
 	apiKey := strings.TrimSpace(parser.OpenDataLoaderAPIKey)
 	if apiKey == "" && !parser.UseTenantModelConfig {
 		apiKey = strings.TrimSpace(common.GetEnv(common.EnvOpenDataLoaderAPIKey))
 	}
-
-	bodyReader, contentType, err := openDataLoaderMultipart(filename, data, parser)
-	if err != nil {
-		return ParseResult{Err: err}
-	}
-	timeout := time.Duration(parser.OpenDataLoaderTimeout) * time.Second
-	if timeout <= 0 {
-		timeout = openDataLoaderTimeoutSeconds * time.Second
-	}
-	// Derive from the pipeline context so a cancelled or expiring run stops
-	// waiting on the server, and cap it by the configured timeout.
-	reqCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, strings.TrimRight(baseURL, "/")+"/file_parse", bodyReader)
-	if err != nil {
-		return ParseResult{Err: fmt.Errorf("parser: OpenDataLoader request: %w", err)}
-	}
-	req.Header.Set("Content-Type", contentType)
-	if apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+apiKey)
-	}
-	resp, err := common.GetSSRFHTTPClient().Do(req)
-	if err != nil {
-		return ParseResult{Err: fmt.Errorf("parser: OpenDataLoader submit: %w", err)}
-	}
-	defer resp.Body.Close()
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return ParseResult{Err: fmt.Errorf("parser: OpenDataLoader read: %w", err)}
-	}
-	if resp.StatusCode >= 300 {
-		return ParseResult{Err: fmt.Errorf("parser: OpenDataLoader HTTP %d: %s", resp.StatusCode, string(raw))}
-	}
-	var payload struct {
-		JSONDoc any    `json:"json_doc"`
-		MDText  string `json:"md_text"`
-	}
-	if err = json.Unmarshal(raw, &payload); err != nil {
-		return ParseResult{Err: fmt.Errorf("parser: OpenDataLoader decode: %w", err)}
-	}
-	if payload.JSONDoc != nil {
-		sizes, pageCount, geometryErr := openDataLoaderPageGeometry(ctx, data, openDataLoaderPageIndexes(payload.JSONDoc))
-		items, boxWarnings := openDataLoaderItemsWithGeometry(payload.JSONDoc, sizes)
-		if len(items) > 0 {
-			if pageCount <= 0 {
-				// No pdfium geometry (nocgo, or a document it cannot load):
-				// fall back to the pages the service reported.
-				pageCount = openDataLoaderReportedPageCount(payload.JSONDoc)
-			}
-			res := pdfItemsToResult(filename, items, pageCount)
-			if geometryErr != nil {
-				res.Warnings = append(res.Warnings, "OpenDataLoader PDF geometry unavailable: "+geometryErr.Error())
-			}
-			res.Warnings = append(res.Warnings, boxWarnings...)
-			return res
-		}
-	}
-	if strings.TrimSpace(payload.MDText) != "" {
-		return pdfMarkdownToResult(ctx, filename, payload.MDText, 1)
-	}
-	return ParseResult{Err: fmt.Errorf("parser: OpenDataLoader returned no parsed content")}
-}
-
-func openDataLoaderMultipart(filename string, data []byte, parser *PDFParser) (io.Reader, string, error) {
-	var body strings.Builder
-	writer := multipart.NewWriter(&body)
-	part, err := writer.CreateFormFile("file", filename)
-	if err != nil {
-		return nil, "", fmt.Errorf("parser: OpenDataLoader create form file: %w", err)
-	}
-	if _, err = part.Write(data); err != nil {
-		return nil, "", fmt.Errorf("parser: OpenDataLoader write PDF: %w", err)
-	}
+	var fields []fileParseField
 	if parser.OpenDataLoaderHybrid != "" {
-		_ = writer.WriteField("hybrid", parser.OpenDataLoaderHybrid)
+		fields = append(fields, fileParseField{name: "hybrid", value: parser.OpenDataLoaderHybrid})
 	}
 	if parser.OpenDataLoaderImageOutput != "" {
-		_ = writer.WriteField("image_output", parser.OpenDataLoaderImageOutput)
+		fields = append(fields, fileParseField{name: "image_output", value: parser.OpenDataLoaderImageOutput})
 	}
 	if parser.OpenDataLoaderSanitize != nil {
+		value := "false"
 		if *parser.OpenDataLoaderSanitize {
-			_ = writer.WriteField("sanitize", "true")
-		} else {
-			_ = writer.WriteField("sanitize", "false")
+			value = "true"
 		}
+		fields = append(fields, fileParseField{name: "sanitize", value: value})
 	}
-	if err = writer.Close(); err != nil {
-		return nil, "", fmt.Errorf("parser: OpenDataLoader finalize form: %w", err)
-	}
-	return strings.NewReader(body.String()), writer.FormDataContentType(), nil
+	return parsePDFWithStructuredFileParse(ctx, filename, data, fileParseRequest{
+		backend:         "OpenDataLoader",
+		endpointSetting: "opendataloader_apiserver or OPENDATALOADER_APISERVER",
+		baseURL:         baseURL,
+		apiKey:          apiKey,
+		timeout:         time.Duration(parser.OpenDataLoaderTimeout) * time.Second,
+		fields:          fields,
+	})
 }
 
-// openDataLoaderItemsWithGeometry flattens every typed element into a parse
-// item. pageSizes maps a 0-based page index to the PDF's page size in points;
-// when it is nil (nocgo, or a document pdfium cannot load) the items keep
-// their text and the reported page number, but carry no positions. The second
-// return value reports the pages whose boxes did not fit that page size.
 func openDataLoaderItemsWithGeometry(root any, pageSizes map[int][2]float64) ([]map[string]any, []string) {
+	return fileParseItems("OpenDataLoader", root, pageSizes)
+}
+
+// fileParseItems flattens every typed element into a parse item. pageSizes
+// maps a 0-based page index to the PDF's page size in points; when it is nil
+// (nocgo, or a document pdfium cannot load) the items keep their text and the
+// reported page number, but carry no positions. The second return value
+// reports the pages whose boxes did not fit that page size. backend names the
+// service in those warnings.
+func fileParseItems(backend string, root any, pageSizes map[int][2]float64) ([]map[string]any, []string) {
 	items := []map[string]any{}
 	// One warning per page: a page whose boxes disagree with the point space
 	// is a coordinate-space mismatch worth surfacing, but repeating it per
@@ -144,7 +71,7 @@ func openDataLoaderItemsWithGeometry(root any, pageSizes map[int][2]float64) ([]
 	walk = func(node any) {
 		switch v := node.(type) {
 		case map[string]any:
-			item, page, warning := openDataLoaderNodeToItem(v, pageSizes)
+			item, page, warning := openDataLoaderNodeToItem(backend, v, pageSizes)
 			if item != nil {
 				items = append(items, item)
 			}
@@ -173,7 +100,7 @@ func openDataLoaderItemsWithGeometry(root any, pageSizes map[int][2]float64) ([]
 	return items, warnings
 }
 
-func openDataLoaderNodeToItem(el map[string]any, pageSizes map[int][2]float64) (map[string]any, int, string) {
+func openDataLoaderNodeToItem(backend string, el map[string]any, pageSizes map[int][2]float64) (map[string]any, int, string) {
 	rawType, _ := el["type"].(string)
 	t := strings.ToLower(strings.TrimSpace(rawType))
 	if t == "" {
@@ -202,17 +129,17 @@ func openDataLoaderNodeToItem(el map[string]any, pageSizes map[int][2]float64) (
 		}
 		item := map[string]any{"text": text, "doc_type_kwd": pdfTableDocType(text), "layout": "table"}
 		projectPDFTable(item)
-		return openDataLoaderWithPositions(item, el, pageSizes)
+		return openDataLoaderWithPositions(backend, item, el, pageSizes)
 	case "image", "picture", "figure":
 		if text == "" {
 			text = "[Image]"
 		}
-		return openDataLoaderWithPositions(map[string]any{"text": text, "doc_type_kwd": "image", "layout": "figure"}, el, pageSizes)
+		return openDataLoaderWithPositions(backend, map[string]any{"text": text, "doc_type_kwd": "image", "layout": "figure"}, el, pageSizes)
 	case "formula", "equation":
 		if text == "" {
 			return nil, 0, ""
 		}
-		return openDataLoaderWithPositions(map[string]any{"text": text, "doc_type_kwd": "text", "layout": "equation"}, el, pageSizes)
+		return openDataLoaderWithPositions(backend, map[string]any{"text": text, "doc_type_kwd": "text", "layout": "equation"}, el, pageSizes)
 	default:
 		if text == "" {
 			return nil, 0, ""
@@ -221,11 +148,11 @@ func openDataLoaderNodeToItem(el map[string]any, pageSizes map[int][2]float64) (
 		if t == "title" || t == "heading" {
 			layout = "title"
 		}
-		return openDataLoaderWithPositions(map[string]any{"text": text, "doc_type_kwd": "text", "layout": layout}, el, pageSizes)
+		return openDataLoaderWithPositions(backend, map[string]any{"text": text, "doc_type_kwd": "text", "layout": layout}, el, pageSizes)
 	}
 }
 
-func openDataLoaderWithPositions(item map[string]any, el map[string]any, pageSizes map[int][2]float64) (map[string]any, int, string) {
+func openDataLoaderWithPositions(backend string, item map[string]any, el map[string]any, pageSizes map[int][2]float64) (map[string]any, int, string) {
 	page, ok := openDataLoaderPageNumber(el)
 	if !ok {
 		return item, 0, ""
@@ -234,7 +161,7 @@ func openDataLoaderWithPositions(item map[string]any, el map[string]any, pageSiz
 	// matching the PaddleOCR adapter: downstream chunking and croppers can
 	// still attribute the item to its page.
 	item["page_number"] = page
-	positions, warning := openDataLoaderPositions(page, el, pageSizes)
+	positions, warning := openDataLoaderPositions(backend, page, el, pageSizes)
 	if len(positions) > 0 {
 		item["positions"], item["_pdf_positions"] = positions, positions
 	}
@@ -258,7 +185,7 @@ const openDataLoaderBleedTolerance = 0.1
 // contract this adapter cannot read, so a box that cannot belong to the page is
 // treated as evidence of a different space and reported through the second
 // return value.
-func openDataLoaderPositions(page int, el map[string]any, pageSizes map[int][2]float64) ([][]any, string) {
+func openDataLoaderPositions(backend string, page int, el map[string]any, pageSizes map[int][2]float64) ([][]any, string) {
 	size, ok := pageSizes[page-1]
 	if !ok || size[0] <= 0 || size[1] <= 0 {
 		return nil, ""
@@ -273,7 +200,7 @@ func openDataLoaderPositions(page int, el map[string]any, pageSizes map[int][2]f
 	}
 	overflowRight, overflowBottom := math.Max(0, math.Max(-left, right-size[0])), math.Max(0, math.Max(-bottom, top-size[1]))
 	if overflowRight > size[0]*openDataLoaderBleedTolerance || overflowBottom > size[1]*openDataLoaderBleedTolerance {
-		return nil, fmt.Sprintf("OpenDataLoader page %d: element box [%g %g %g %g] does not fit page size %gx%g; positions omitted because the service coordinates do not match the PDF point space", page, left, bottom, right, top, size[0], size[1])
+		return nil, fmt.Sprintf("%s page %d: element box [%g %g %g %g] does not fit page size %gx%g; positions omitted because the service coordinates do not match the PDF point space", backend, page, left, bottom, right, top, size[0], size[1])
 	}
 	left = math.Max(0, math.Min(size[0], left))
 	right = math.Max(0, math.Min(size[0], right))

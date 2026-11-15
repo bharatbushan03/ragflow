@@ -489,6 +489,7 @@ var providerAPIKeyConfigFields = map[string]struct{}{
 	"mineru_output_dir":        {},
 	"mineru_server_url":        {},
 	"opendataloader_apiserver": {},
+	"yolowpdf_apiserver":       {},
 	"paddleocr_api_url":        {},
 	"provider_order":           {},
 }
@@ -507,6 +508,7 @@ var safeProviderAPIKeyConfigFields = map[string]struct{}{
 	"mineru_output_dir":        {},
 	"mineru_server_url":        {},
 	"opendataloader_apiserver": {},
+	"yolowpdf_apiserver":       {},
 	"paddleocr_api_url":        {},
 	"provider_order":           {},
 }
@@ -1871,6 +1873,7 @@ func (m *ModelProviderService) ListModelsForUserInTenant(ctx context.Context, re
 		_ = m.ensureMonkeyOCRFromEnv(ctx, tenantID)
 		_ = m.ensurePaddleOCREnabledFromEnv(ctx, tenantID)
 		_ = m.ensureOpenDataLoaderFromEnv(ctx, tenantID)
+		_ = m.ensureYoloWPDFFromEnv(ctx, tenantID)
 	}
 
 	var modelTypeFilterBin entity.ModelType
@@ -2128,6 +2131,21 @@ func (m *ModelProviderService) ensureOpenDataLoaderFromEnv(ctx context.Context, 
 	return m.ensureOCRProviderFromEnv(ctx, tenantID, "OpenDataLoader", "opendataloader-from-env", config)
 }
 
+// ensureYoloWPDFFromEnv registers a YoloWPDF OCR instance when YOLOWPDF_APISERVER
+// is set. The optional API key is stored with that instance and is not copied
+// from the environment when only the key is present.
+func (m *ModelProviderService) ensureYoloWPDFFromEnv(ctx context.Context, tenantID string) error {
+	config := collectEnvConfig(yoloWPDFEnvKeys, yoloWPDFDefaultConfig)
+	if config == nil {
+		return nil
+	}
+	server, _ := config[common.EnvYoloWPDFAPIServer].(string)
+	if strings.TrimSpace(server) == "" {
+		return nil
+	}
+	return m.ensureOCRProviderFromEnv(ctx, tenantID, "YoloWPDF", "yolowpdf-from-env", config)
+}
+
 // ensureMonkeyOCRv2FromEnv mirrors Python's ensure_monkeyocrv2_from_env.
 func (m *ModelProviderService) ensureMonkeyOCRv2FromEnv(ctx context.Context, tenantID string) error {
 	config := collectEnvConfig(monkeyOCRv2EnvKeys, monkeyOCRv2DefaultConfig)
@@ -2178,6 +2196,14 @@ var (
 	}
 	openDataLoaderDefaultConfig = map[string]interface{}{
 		common.EnvOpenDataLoaderAPIServer: "",
+	}
+	yoloWPDFEnvKeys = []string{
+		common.EnvYoloWPDFAPIServer,
+		common.EnvYoloWPDFAPIKey,
+	}
+	yoloWPDFDefaultConfig = map[string]interface{}{
+		common.EnvYoloWPDFAPIServer: "",
+		common.EnvYoloWPDFAPIKey:    "",
 	}
 	monkeyOCRv2EnvKeys = []string{
 		common.EnvMonkeyOCRv2ServerURL,

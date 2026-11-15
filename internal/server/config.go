@@ -320,6 +320,7 @@ var sensitiveConfigKeys = map[string]struct{}{
 	"sas_token":       {},
 
 	"open_dataloader_api_key": {},
+	"yolowpdf_api_key":        {},
 	"paddle_ocr_access_token": {},
 	"somark_api_key":          {},
 	"tcad_api_key":            {},

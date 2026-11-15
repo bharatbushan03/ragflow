@@ -507,6 +507,75 @@ export const ProviderConfigMap: Record<string, ProviderConfig> = {
     },
   },
 
+  // ============ YoloWPDF ============
+  [LLMFactory.YoloWPDF]: {
+    llmFactory: LLMFactory.YoloWPDF,
+    title: 'YoloWPDF',
+    fields: [
+      {
+        name: 'instance_name',
+        label: 'instanceName',
+        type: FormFieldType.Text,
+        required: true,
+        placeholder: 'instanceNameMessage',
+        tooltip: 'instanceNameTip',
+        validation: { message: 'instanceNameMessage' },
+      },
+      {
+        name: 'yolowpdf_api_key',
+        label: 'apiKey',
+        type: FormFieldType.Password,
+        required: false,
+        placeholder: 'apiKeyPlaceholder',
+      },
+      {
+        name: 'yolowpdf_apiserver',
+        label: 'baseUrl',
+        type: FormFieldType.Text,
+        required: true,
+        placeholder: 'yolowpdfApiserverPlaceholder',
+        validation: { message: 'yolowpdfApiserverMessage' },
+      },
+    ],
+    verifyTransform: (values) => {
+      const cfg: Record<string, any> = {};
+      if (values.yolowpdf_apiserver) {
+        cfg.yolowpdf_apiserver = values.yolowpdf_apiserver;
+      }
+      if (values.yolowpdf_api_key) {
+        cfg.yolowpdf_api_key = values.yolowpdf_api_key;
+      }
+      return {
+        apiKey: cfg,
+        baseUrl: values.yolowpdf_apiserver,
+        modelInfo: [],
+      };
+    },
+    submitTransform: (values) => {
+      const cfg: Record<string, any> = {};
+      if (values.yolowpdf_apiserver) {
+        cfg.yolowpdf_apiserver = values.yolowpdf_apiserver;
+      }
+      if (values.yolowpdf_api_key) {
+        cfg.yolowpdf_api_key = values.yolowpdf_api_key;
+      }
+      return {
+        instance_name: values.instance_name,
+        llm_factory: LLMFactory.YoloWPDF,
+        api_key: cfg,
+        base_url: '',
+        model_info: [],
+      };
+    },
+    echoTransform: (instance) => {
+      const obj = parseApiKeyAsObject(instance.api_key_config) ?? {};
+      return {
+        yolowpdf_apiserver: obj.yolowpdf_apiserver ?? '',
+        yolowpdf_api_key: obj.yolowpdf_api_key ?? '',
+      };
+    },
+  },
+
   // ============ PaddleOCR ============
   [LLMFactory.PaddleOCR]: {
     llmFactory: LLMFactory.PaddleOCR,

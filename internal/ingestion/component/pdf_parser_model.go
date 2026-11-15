@@ -33,13 +33,15 @@ import (
 
 // tenantPDFParserEngine identifies parser backends, not generic ModelDrivers.
 // Their tenant records are resolved directly through the existing DAOs because
-// SoMark and OpenDataLoader do not have a chat/OCR driver in conf/models.
+// SoMark, OpenDataLoader, and YoloWPDF do not have a chat/OCR driver in conf/models.
 func tenantPDFParserEngine(provider string) string {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
 	case "somark":
 		return "somark"
 	case "opendataloader":
 		return "opendataloader"
+	case "yolowpdf":
+		return "yolowpdf"
 	}
 	return ""
 }
@@ -65,9 +67,12 @@ func maybeDispatchTenantPDFParser(ctx context.Context, db *gorm.DB, filename str
 		if err != nil || strings.TrimSpace(modelName) == "" || strings.TrimSpace(instanceName) == "" {
 			return parser.ParseResult{}, true, fmt.Errorf("parser: invalid %s model reference", engine)
 		}
-		if engine == "somark" {
+		switch engine {
+		case "somark":
 			providerName = "SoMark"
-		} else {
+		case "yolowpdf":
+			providerName = "YoloWPDF"
+		default:
 			providerName = "OpenDataLoader"
 		}
 	}
@@ -158,9 +163,12 @@ func maybeDispatchTenantPDFParser(ctx context.Context, db *gorm.DB, filename str
 	pdf.ConfigureFromSetup(options)
 	pdf.ParseMethod = engine
 	pdf.UseTenantModelConfig = true
-	if engine == "somark" {
+	switch engine {
+	case "somark":
 		pdf.SoMarkBaseURL, pdf.SoMarkAPIKey = baseURL, apiKey
-	} else {
+	case "yolowpdf":
+		pdf.YoloWPDFAPIServer, pdf.YoloWPDFAPIKey = baseURL, apiKey
+	default:
 		pdf.OpenDataLoaderAPIServer, pdf.OpenDataLoaderAPIKey = baseURL, apiKey
 	}
 	result := pdf.ParseWithResult(ctx, filename, binary)
