@@ -67,6 +67,47 @@ func TestDriverHTTPClientLogsProviderRequestAndResponseWhenEnabled(t *testing.T)
 	}
 }
 
+func TestDriverHTTPClientRedactsAliyunAccessKeys(t *testing.T) {
+	t.Setenv(EnvLLMDebug, "true")
+	core, logs := observer.New(zapcore.InfoLevel)
+	previousLogger := Logger
+	Logger = zap.New(core)
+	t.Cleanup(func() {
+		Logger = previousLogger
+	})
+
+	const accessKeyID = "LTAI-test-only"
+	const accessKeySecret = "test-only-aliyun-secret"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"OSSAccessKeyId":%q,"access_key_secret":%q,"region":"cn-hangzhou"}`, accessKeyID, accessKeySecret)
+	}))
+	defer server.Close()
+
+	client := GetSchemeSafeHTTPClient()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, server.URL+"/oss", strings.NewReader(fmt.Sprintf(`{"access_key":%q,"Signature":"signed-policy","region":"cn-hangzhou"}`, accessKeyID)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = io.ReadAll(resp.Body); err != nil {
+		t.Fatal(err)
+	}
+	if err = resp.Body.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	message := logs.All()[0].Message
+	if strings.Contains(message, accessKeyID) || strings.Contains(message, accessKeySecret) || strings.Contains(message, "signed-policy") {
+		t.Fatalf("provider log contains an Aliyun credential: %s", message)
+	}
+	if !strings.Contains(message, `"region":"cn-hangzhou"`) {
+		t.Fatalf("provider log dropped a public field: %s", message)
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
