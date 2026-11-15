@@ -792,8 +792,8 @@ func (h *Handler) SetVariable(c *gin.Context) {
 	common.RespondSuccess(c, nil, "Set variable successfully")
 }
 
-// ListConfigs returns configurations, including plaintext credentials, for
-// superuser inspection. AuthMiddleware enforces superuser access.
+// ListConfigs returns configurations for superuser inspection. Credential
+// fields are masked. AuthMiddleware enforces superuser access.
 func (h *Handler) ListConfigs(c *gin.Context) {
 	configs, err := h.service.ListAllConfigs()
 	if err != nil {

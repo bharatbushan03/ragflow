@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"slices"
@@ -39,6 +40,137 @@ func ConfigSchema(provider string) (map[string]any, error) {
 		return nil, &ValidationError{Message: fmt.Sprintf("unknown provider: %s", provider)}
 	}
 	return cloneMap(s), nil
+}
+
+func secretFieldNames(provider string) (map[string]struct{}, error) {
+	schema, err := ConfigSchema(provider)
+	if err != nil {
+		return nil, err
+	}
+	names := make(map[string]struct{})
+	for name, raw := range schema {
+		field, ok := raw.(map[string]any)
+		if !ok || field["secret"] != true {
+			continue
+		}
+		names[name] = struct{}{}
+	}
+	return names, nil
+}
+
+// RedactSecrets clears schema fields marked secret. Unchanged configs are returned as-is.
+func RedactSecrets(provider string, config map[string]any) (map[string]any, bool, error) {
+	if len(config) == 0 {
+		return config, false, nil
+	}
+	names, err := secretFieldNames(provider)
+	if err != nil {
+		return nil, false, err
+	}
+	out := cloneMap(config)
+	cleared := false
+	for name := range names {
+		value, ok := out[name].(string)
+		if !ok || strings.TrimSpace(value) == "" {
+			continue
+		}
+		out[name] = ""
+		cleared = true
+	}
+	if !cleared {
+		return config, false, nil
+	}
+	return out, true, nil
+}
+
+// RestoreBlankSecrets copies stored secret values into blank submitted fields.
+// A non-blank submitted secret replaces the stored one.
+func RestoreBlankSecrets(provider string, submitted, stored map[string]any) (map[string]any, bool, error) {
+	names, err := secretFieldNames(provider)
+	if err != nil {
+		return nil, false, err
+	}
+	if submitted == nil {
+		submitted = map[string]any{}
+	}
+	out := cloneMap(submitted)
+	restored := false
+	for name := range names {
+		if strings.TrimSpace(stringValue(out[name])) != "" {
+			continue
+		}
+		storedValue := strings.TrimSpace(stringValue(stored[name]))
+		if storedValue == "" {
+			continue
+		}
+		out[name] = storedValue
+		restored = true
+	}
+	if !restored {
+		return submitted, false, nil
+	}
+	return out, true, nil
+}
+
+func sandboxSettingProvider(name string) (string, bool) {
+	const prefix = "sandbox."
+	if !strings.HasPrefix(name, prefix) || name == prefix+"provider_type" {
+		return "", false
+	}
+	provider := strings.TrimPrefix(name, prefix)
+	if _, err := ConfigSchema(provider); err != nil {
+		return "", false
+	}
+	return provider, true
+}
+
+// RedactSecretSetting clears secret fields in a sandbox.<provider> JSON setting.
+func RedactSecretSetting(name, raw string) (string, bool) {
+	provider, ok := sandboxSettingProvider(name)
+	if !ok {
+		return raw, false
+	}
+	var config map[string]any
+	if err := json.Unmarshal([]byte(raw), &config); err != nil || config == nil {
+		return raw, false
+	}
+	redacted, cleared, err := RedactSecrets(provider, config)
+	if err != nil || !cleared {
+		return raw, false
+	}
+	encoded, err := json.Marshal(redacted)
+	if err != nil {
+		return raw, false
+	}
+	return string(encoded), true
+}
+
+// RestoreBlankSecretSetting fills blank secrets in a sandbox.<provider> JSON
+// setting from the previously stored value.
+func RestoreBlankSecretSetting(name, submitted, stored string) (string, bool) {
+	provider, ok := sandboxSettingProvider(name)
+	if !ok {
+		return submitted, false
+	}
+	var submittedConfig map[string]any
+	if err := json.Unmarshal([]byte(submitted), &submittedConfig); err != nil || submittedConfig == nil {
+		return submitted, false
+	}
+	var storedConfig map[string]any
+	if strings.TrimSpace(stored) != "" {
+		if err := json.Unmarshal([]byte(stored), &storedConfig); err != nil {
+			storedConfig = nil
+		}
+	}
+	restored, changed, err := RestoreBlankSecrets(provider, submittedConfig, storedConfig)
+	if err != nil || !changed {
+		return submitted, false
+	}
+	encoded, err := json.Marshal(restored)
+	if err != nil {
+		return submitted, false
+	}
+	return string(encoded), true
 }
 
 func ListProviders() []map[string]any {
@@ -273,7 +405,7 @@ func staticSchema(provider string) map[string]any {
 		return sshSchema()
 	case "aliyun_codeinterpreter":
 		return map[string]any{
-			"access_key_id":     fieldWith("string", true, "Access Key ID", "placeholder", "LTAI5t...", "description", "Aliyun AccessKey ID for authentication", "secret", false),
+			"access_key_id":     fieldWith("string", true, "Access Key ID", "placeholder", "LTAI5t...", "description", "Aliyun AccessKey ID for authentication", "secret", true),
 			"access_key_secret": fieldWith("string", true, "Access Key Secret", "placeholder", "••••••••••••••••", "description", "Aliyun AccessKey Secret for authentication", "secret", true),
 			"account_id":        fieldWith("string", true, "Account ID", "placeholder", "1234567890...", "description", "Aliyun primary account ID, required for API calls"),
 			"region":            fieldWith("string", false, "Region", "default", "cn-hangzhou", "description", "Aliyun region for Code Interpreter service", "options", []any{"cn-hangzhou", "cn-beijing", "cn-shanghai", "cn-shenzhen", "cn-guangzhou"}),

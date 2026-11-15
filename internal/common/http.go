@@ -425,10 +425,17 @@ func isNumericVector(value []any) bool {
 func isSensitiveLogKey(key string) bool {
 	normalized := strings.NewReplacer("-", "", "_", "", ".", "").Replace(strings.ToLower(key))
 	switch normalized {
-	case "apikey", "authorization", "accesstoken", "refreshtoken", "password", "secret", "token", "key":
+	case "apikey", "authorization", "accesstoken", "refreshtoken", "password", "secret", "token", "key", "signature":
 		return true
 	default:
-		return false
+		return strings.Contains(normalized, "accesskey") ||
+			strings.Contains(normalized, "secretkey") ||
+			strings.Contains(normalized, "apikey") ||
+			strings.Contains(normalized, "accesstoken") ||
+			strings.Contains(normalized, "refreshtoken") ||
+			strings.Contains(normalized, "clientsecret") ||
+			strings.Contains(normalized, "sessiontoken") ||
+			strings.HasSuffix(normalized, "password")
 	}
 }
 
