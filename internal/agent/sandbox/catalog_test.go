@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -164,6 +165,13 @@ func TestValidateConfigTypesRangesAndProviderRules(t *testing.T) {
 	}); err == nil {
 		t.Fatal("invalid Aliyun access key accepted")
 	}
+	schema, err := ConfigSchema("aliyun_codeinterpreter")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if schema["access_key_id"].(map[string]any)["secret"] != true {
+		t.Fatal("Aliyun access_key_id is not marked secret")
+	}
 	if err := ValidateConfig("tenki", map[string]any{"api_key": "key", "timeout": 0}); err == nil {
 		t.Fatal("invalid Tenki timeout accepted")
 	}
@@ -186,5 +194,53 @@ func TestSelfManagedRetiredSettingsAreTolerated(t *testing.T) {
 	}
 	if err := ValidateConfig("self_managed", cfg); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAliyunSecretsStayOutOfPublicConfig(t *testing.T) {
+	const accessKeyID = "LTAI-test-only"
+	const accessKeySecret = "test-only-aliyun-secret"
+	stored := map[string]any{
+		"access_key_id":     accessKeyID,
+		"access_key_secret": accessKeySecret,
+		"account_id":        "account-1",
+		"region":            "cn-hangzhou",
+	}
+	redacted, cleared, err := RedactSecrets("aliyun_codeinterpreter", stored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cleared {
+		t.Fatal("expected Aliyun credentials to be cleared")
+	}
+	if redacted["access_key_id"] != "" || redacted["access_key_secret"] != "" {
+		t.Fatalf("redacted config = %#v", redacted)
+	}
+	if redacted["account_id"] != "account-1" || redacted["region"] != "cn-hangzhou" {
+		t.Fatalf("public fields changed: %#v", redacted)
+	}
+	if stored["access_key_id"] != accessKeyID {
+		t.Fatal("redaction mutated the stored config")
+	}
+
+	submitted := map[string]any{"access_key_id": "", "access_key_secret": "   ", "account_id": "account-1", "region": "cn-beijing"}
+	restored, changed, err := RestoreBlankSecrets("aliyun_codeinterpreter", submitted, stored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed || restored["access_key_id"] != accessKeyID || restored["access_key_secret"] != accessKeySecret {
+		t.Fatalf("restored config = %#v", restored)
+	}
+	if restored["region"] != "cn-beijing" {
+		t.Fatalf("region = %#v", restored["region"])
+	}
+
+	raw := `{"access_key_id":"` + accessKeyID + `","access_key_secret":"` + accessKeySecret + `","account_id":"account-1"}`
+	public, ok := RedactSecretSetting("sandbox.aliyun_codeinterpreter", raw)
+	if !ok || strings.Contains(public, accessKeyID) || strings.Contains(public, accessKeySecret) {
+		t.Fatalf("public setting = %q ok=%v", public, ok)
+	}
+	if !strings.Contains(public, "account-1") {
+		t.Fatalf("public setting dropped account id: %s", public)
 	}
 }

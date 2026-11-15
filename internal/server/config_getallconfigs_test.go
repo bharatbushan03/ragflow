@@ -222,4 +222,49 @@ os:
 	if !foundOpenSearch {
 		t.Fatalf("OpenSearch config not exported in GetAllConfigs: %#v", allConfigs)
 	}
+	if strings.Contains(fmt.Sprint(allConfigs), "test-only-os-secret") {
+		t.Fatal("OpenSearch password exported")
+	}
+}
+
+func TestGetAllConfigsMasksAliyunOSSCredentials(t *testing.T) {
+	t.Setenv(common.EnvStorageImpl, "oss")
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "service_conf.yaml")
+	const accessKey = "test-only-oss-access-key"
+	const secretKey = "test-only-oss-secret-key"
+	content := `
+general:
+  storage_engine: oss
+oss:
+  access_key: '` + accessKey + `'
+  secret_key: '` + secretKey + `'
+  endpoint_url: 'https://oss-cn-hangzhou.aliyuncs.com'
+  region: 'cn-hangzhou'
+  bucket: 'ragflow-test'
+`
+	if err := os.WriteFile(cfgPath, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := Init(cfgPath); err != nil {
+		t.Fatal(err)
+	}
+
+	allConfigs, err := GetAllConfigs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	exported := fmt.Sprint(allConfigs)
+	if strings.Contains(exported, accessKey) || strings.Contains(exported, secretKey) {
+		t.Fatalf("Aliyun OSS credentials exported: %s", exported)
+	}
+	var found bool
+	for _, cfg := range allConfigs {
+		if cfg["endpoint_url"] == "https://oss-cn-hangzhou.aliyuncs.com" && cfg["bucket"] == "ragflow-test" && cfg["access_key"] == "******" && cfg["secret_key"] == "******" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("masked OSS config not exported: %#v", allConfigs)
+	}
 }

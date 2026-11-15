@@ -230,3 +230,42 @@ func TestSetVariableRejectsMalformedBody(t *testing.T) {
 		t.Fatalf("message = %q, want it to name the malformed body", response.Message)
 	}
 }
+
+func TestAliyunSandboxVariableHidesCredentials(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler, db := setupSetVariableHandler(t)
+
+	const accessKeyID = "LTAI-test-only"
+	const accessKeySecret = "test-only-aliyun-secret"
+	body := `{"var_name":"sandbox.aliyun_codeinterpreter","var_value":{"access_key_id":"` + accessKeyID + `","access_key_secret":"` + accessKeySecret + `","account_id":"account-1","region":"cn-hangzhou"}}`
+	if response := putVariable(t, handler, body); response.Code != int(common.CodeSuccess) {
+		t.Fatalf("save: code = %d, message = %s", response.Code, response.Message)
+	}
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/v1/admin/variables", nil)
+	handler.ListVariables(ctx)
+	listed := recorder.Body.String()
+	if strings.Contains(listed, accessKeyID) || strings.Contains(listed, accessKeySecret) {
+		t.Fatalf("variable list leaked Aliyun credentials: %s", listed)
+	}
+	if !strings.Contains(listed, "account-1") {
+		t.Fatalf("variable list dropped the account id: %s", listed)
+	}
+
+	update := `{"var_name":"sandbox.aliyun_codeinterpreter","var_value":{"access_key_id":"","access_key_secret":"","account_id":"account-1","region":"cn-beijing"}}`
+	if response := putVariable(t, handler, update); response.Code != int(common.CodeSuccess) {
+		t.Fatalf("update: code = %d, message = %s", response.Code, response.Message)
+	}
+	var stored entity.SystemSettings
+	if err := db.Where("name = ?", "sandbox.aliyun_codeinterpreter").First(&stored).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stored.Value, accessKeyID) || !strings.Contains(stored.Value, accessKeySecret) {
+		t.Fatalf("blank update erased stored credentials: %s", stored.Value)
+	}
+	if !strings.Contains(stored.Value, "cn-beijing") {
+		t.Fatalf("region was not updated: %s", stored.Value)
+	}
+}

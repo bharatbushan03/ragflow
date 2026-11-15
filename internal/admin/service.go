@@ -1076,7 +1076,7 @@ func (s *Service) GetVariable(ctx context.Context, varName string) ([]map[string
 			return nil, NewAdminException("Can't get setting: " + varName)
 		}
 	}
-	return entity.FormatSystemSettings(settings), nil
+	return redactSandboxSettings(entity.FormatSystemSettings(settings)), nil
 }
 
 // ListAllVariables list all variables
@@ -1087,7 +1087,19 @@ func (s *Service) ListAllVariables(ctx context.Context) ([]map[string]interface{
 		return nil, err
 	}
 
-	return entity.FormatSystemSettings(settings), nil
+	return redactSandboxSettings(entity.FormatSystemSettings(settings)), nil
+}
+
+func redactSandboxSettings(settings []map[string]interface{}) []map[string]interface{} {
+	for _, setting := range settings {
+		name, _ := setting["name"].(string)
+		value, _ := setting["value"].(string)
+		redacted, ok := sandbox.RedactSecretSetting(name, value)
+		if ok {
+			setting["value"] = redacted
+		}
+	}
+	return settings
 }
 
 // SetVariable set variable
@@ -1105,6 +1117,9 @@ func (s *Service) setVariable(ctx context.Context, db *gorm.DB, varName, varValu
 
 	if len(settings) == 1 {
 		setting := &settings[0]
+		if restored, ok := sandbox.RestoreBlankSecretSetting(varName, varValue, setting.Value); ok {
+			varValue = restored
+		}
 		if err = entity.ValidateSystemSettingValue(*setting, varValue); err != nil {
 			return err
 		}
@@ -1279,13 +1294,25 @@ func (s *Service) GetSandboxConfig(ctx context.Context, providerType string) (ma
 			}
 		}
 	}
-	return map[string]interface{}{"provider_type": providerType, "config": config}, nil
+	redacted, _, err := sandbox.RedactSecrets(providerType, config)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"provider_type": providerType, "config": redacted}, nil
 }
 
 // SetSandboxConfig set sandbox config
 func (s *Service) SetSandboxConfig(ctx context.Context, providerType string, config map[string]interface{}, setActive bool) (map[string]interface{}, error) {
 	if config == nil {
 		return nil, common.NewCodedError(common.CodeBadRequest, "config must be a JSON object")
+	}
+	stored, err := s.storedSandboxObject(ctx, providerType)
+	if err != nil {
+		return nil, err
+	}
+	config, _, err = sandbox.RestoreBlankSecrets(providerType, config, stored)
+	if err != nil {
+		return nil, common.NewCodedError(common.CodeBadRequest, err.Error())
 	}
 	if err := sandbox.ValidateConfig(providerType, config); err != nil {
 		return nil, common.NewCodedError(common.CodeBadRequest, err.Error())
@@ -1305,11 +1332,40 @@ func (s *Service) SetSandboxConfig(ctx context.Context, providerType string, con
 	if err != nil {
 		return nil, err
 	}
-	return map[string]interface{}{"provider_type": providerType, "config": config}, nil
+	redacted, _, err := sandbox.RedactSecrets(providerType, config)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"provider_type": providerType, "config": redacted}, nil
 }
 
-// TestSandboxConnection test sandbox connection
+func (s *Service) storedSandboxObject(ctx context.Context, providerType string) (map[string]any, error) {
+	settings, err := s.systemSettingsDAO.GetByName(ctx, dao.DB, "sandbox."+providerType)
+	if err != nil {
+		return nil, err
+	}
+	if len(settings) == 0 || strings.TrimSpace(settings[0].Value) == "" {
+		return nil, nil
+	}
+	var value any
+	if err := json.Unmarshal([]byte(settings[0].Value), &value); err != nil {
+		return nil, nil
+	}
+	object, _ := value.(map[string]any)
+	return object, nil
+}
+
+// TestSandboxConnection test sandbox connection. Blank secret fields are
+// filled from the stored provider configuration before the provider is called.
 func (s *Service) TestSandboxConnection(ctx context.Context, providerType string, config map[string]interface{}) (map[string]interface{}, error) {
+	stored, err := s.storedSandboxObject(ctx, providerType)
+	if err != nil {
+		return nil, err
+	}
+	config, _, err = sandbox.RestoreBlankSecrets(providerType, config, stored)
+	if err != nil {
+		return nil, common.NewCodedError(common.CodeBadRequest, err.Error())
+	}
 	result, err := sandbox.TestConnection(ctx, providerType, config)
 	if err != nil {
 		return nil, common.NewCodedError(common.CodeBadRequest, err.Error())

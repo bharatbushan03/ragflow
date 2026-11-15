@@ -191,8 +191,8 @@ func MCPAllowPrivateHosts() bool {
 }
 
 // GetAllConfigs collects backend connection settings for administrator inspection.
-// ExportConfigs intentionally retains plaintext credentials; the admin configuration
-// endpoint restricts access to superusers, while PrintAll masks credentials in logs.
+// Credential fields, including Aliyun OSS access_key and secret_key, are masked
+// before the result leaves this process. PrintAll applies the same mask to logs.
 func GetAllConfigs() ([]map[string]interface{}, error) {
 	var allConfigs []map[string]interface{}
 
@@ -301,23 +301,33 @@ func GetAllConfigs() ([]map[string]interface{}, error) {
 	exportedOTELConfigs := oTelConfig.ExportConfigs()
 	allConfigs = append(allConfigs, exportedOTELConfigs)
 
-	return allConfigs, nil
+	return maskExportedConfigs(allConfigs), nil
+}
+
+func maskExportedConfigs(configs []map[string]interface{}) []map[string]interface{} {
+	masked := make([]map[string]interface{}, len(configs))
+	for i, cfg := range configs {
+		masked[i] = maskConfigCredentials(cfg).(map[string]interface{})
+	}
+	return masked
 }
 
 var sensitiveConfigKeys = map[string]struct{}{
-	"password":        {},
-	"mail_password":   {},
-	"secret":          {},
-	"secret_key":      {},
-	"client_secret":   {},
-	"api_key":         {},
-	"host_api_key":    {},
-	"http_app_key":    {},
-	"http_secret_key": {},
-	"access_key":      {},
-	"secret_id":       {},
-	"session_token":   {},
-	"sas_token":       {},
+	"password":          {},
+	"mail_password":     {},
+	"secret":            {},
+	"secret_key":        {},
+	"client_secret":     {},
+	"api_key":           {},
+	"host_api_key":      {},
+	"http_app_key":      {},
+	"http_secret_key":   {},
+	"access_key":        {},
+	"access_key_id":     {},
+	"access_key_secret": {},
+	"secret_id":         {},
+	"session_token":     {},
+	"sas_token":         {},
 
 	"open_dataloader_api_key": {},
 	"yolowpdf_api_key":        {},
